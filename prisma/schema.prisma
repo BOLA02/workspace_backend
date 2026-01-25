@@ -1,0 +1,128 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(STAFF)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // Relations
+  usageRecords  UsageRecord[]
+  expenses      Expense[]
+  inflows       Inflow[]       // NEW: Added inflow relation
+
+  @@map("users")
+}
+
+model WorkspaceType {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  capacity      Int            @default(1)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // Relations
+  usageRecords  UsageRecord[]
+
+  @@map("workspace_types")
+}
+
+model UsageRecord {
+  id              String        @id @default(cuid())
+  customerName    String
+  amountPaid      Float
+  paymentMethod   PaymentMethod
+  usageDate       DateTime      // Start time of booking
+  endDateTime     DateTime      // End time of booking (when slot becomes available again)
+  duration        String?       // "Day", "Overnight", or custom duration
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Foreign keys
+  staffId         String
+  workspaceTypeId String
+  
+  // Relations
+  staff           User          @relation(fields: [staffId], references: [id])
+  workspaceType   WorkspaceType @relation(fields: [workspaceTypeId], references: [id])
+
+  @@index([staffId])
+  @@index([workspaceTypeId])
+  @@index([usageDate])
+  @@index([endDateTime])
+  @@map("usage_records")
+}
+
+model Expense {
+  id            String         @id @default(cuid())
+  description   String
+  amount        Float
+  category      String         @default("GENERAL")
+  expenseDate   DateTime
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // Foreign key
+  createdById   String
+  
+  // Relations
+  createdBy     User           @relation(fields: [createdById], references: [id])
+
+  @@index([createdById])
+  @@index([expenseDate])
+  @@index([category])
+  @@map("expenses")
+}
+
+model Inflow {
+  id          String    @id @default(cuid())
+  name        String
+  category    String
+  amount      Float
+  duration    String?
+  startDate   DateTime
+  endDate     DateTime?
+  description String?
+  
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([createdById])
+  @@index([startDate])
+  @@index([category])
+  @@map("inflows")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum PaymentMethod {
+  TRANSFER
+  POS
+}
