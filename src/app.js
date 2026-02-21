@@ -3,7 +3,7 @@ import cors from "cors";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import prisma from "./config/prisma.js";
-import { authenticateToken, isAdmin, JWT_SECRET } from "./middleware/auth.js";
+import { authenticateToken, isAdmin} from "./middleware/auth.js";
 import { Parser } from 'json2csv';
 
 const app = express();
