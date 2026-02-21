@@ -1,6 +1,11 @@
+// src/middleware/auth.js
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is not set");
+}
 
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -14,16 +19,15 @@ export const authenticateToken = (req, res, next) => {
     if (err) {
       return res.status(403).json({ error: "Invalid or expired token" });
     }
+
     req.user = user;
     next();
   });
 };
 
 export const isAdmin = (req, res, next) => {
-  if (req.user.role !== "ADMIN") {
+  if (!req.user || req.user.role !== "ADMIN") {
     return res.status(403).json({ error: "Admin access required" });
   }
   next();
 };
-
-export { JWT_SECRET };
