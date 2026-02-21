@@ -6,11 +6,15 @@ import prisma from "./config/prisma.js";
 import { authenticateToken, isAdmin} from "./middleware/auth.js";
 import { Parser } from 'json2csv';
 
+
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const JWT_SECRET = process.env.JWT_SECRET;
+
 // Middleware
-app.use(cors());
+app.use(cors({ origin: "*"}));
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -41,6 +45,13 @@ app.post("/api/auth/login", async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
       return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // ✅ Read secret directly from environment
+    const JWT_SECRET = process.env.JWT_SECRET;
+
+    if (!JWT_SECRET) {
+      return res.status(500).json({ error: "JWT_SECRET not configured" });
     }
 
     const token = jwt.sign(
