@@ -277,9 +277,19 @@ app.delete("/api/workspace-types/:id", authenticateToken, isAdmin, async (req, r
 
 app.post("/api/bookings", authenticateToken, async (req, res) => {
   try {
-    const { customerName, amountPaid, paymentMethod, usageDate, workspaceTypeId } = req.body;
+    const { 
+      customerName, 
+      phoneNumber, 
+      amountPaid, 
+      paymentMethod, 
+      startDate, 
+      duration, 
+      durationType, 
+      workspaceTypeId 
+    } = req.body;
 
-    if (!customerName || !amountPaid || !paymentMethod || !usageDate || !workspaceTypeId) {
+    // 1. Validate all fields matching the frontend modal
+    if (!customerName || !phoneNumber || !amountPaid || !paymentMethod || !startDate || !duration || !durationType || !workspaceTypeId) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
@@ -296,77 +306,51 @@ app.post("/api/bookings", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Workspace type not found" });
     }
 
-    // Parse the booking start time
-    const bookingStart = new Date(usageDate);
-    
-    // Booking ALWAYS ends at 11:59 PM the same day, regardless of check-in time
+    // 2. Parse and compute dates based on duration
+    const bookingStart = new Date(startDate);
+    bookingStart.setHours(0, 0, 0, 0); // Normalized start of the day
+
     const bookingEnd = new Date(bookingStart);
-    bookingEnd.setHours(23, 59, 59, 999);
-    
-    // Duration is always "Day" since it ends same day
-    const duration = "Day";
+    const durationNum = parseInt(duration);
 
-    // Check for overlapping bookings for this workspace type
-    // A booking overlaps if it's on the same calendar day
-    const startOfDay = new Date(bookingStart);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(bookingStart);
-    endOfDay.setHours(23, 59, 59, 999);
+    if (durationType === "MONTHS") {
+      bookingEnd.setMonth(bookingEnd.getMonth() + durationNum);
+    } else {
+      bookingEnd.setDate(bookingEnd.getDate() + durationNum);
+    }
+    bookingEnd.setDate(bookingEnd.getDate() - 1); // Inclusive logic matching your frontend
+    bookingEnd.setHours(23, 59, 59, 999); // Final millisecond of the end day
 
+    // 3. Conflict Check for the entire duration block
     const overlappingBookings = await prisma.usageRecord.findMany({
       where: {
         workspaceTypeId,
         AND: [
-          {
-            // Existing booking starts on or before the end of this day
-            usageDate: { lte: endOfDay }
-          },
-          {
-            // Existing booking ends on or after the start of this day
-            endDateTime: { gte: startOfDay }
-          }
+          { usageDate: { lte: bookingEnd } },
+          { endDateTime: { gte: bookingStart } }
         ]
       }
     });
 
-    // Check if capacity is exceeded
     if (overlappingBookings.length >= workspaceType.capacity) {
-      // Find the earliest time when a slot becomes available
-      const sortedBookings = overlappingBookings.sort((a, b) => 
-        new Date(a.endDateTime).getTime() - new Date(b.endDateTime).getTime()
-      );
-      
-      return res.status(400).json({ 
-        error: "No available slots for this date",
-        capacity: workspaceType.capacity,
-        currentBookings: overlappingBookings.length,
-        bookedFor: bookingStart.toLocaleDateString(),
-        availableFrom: new Date(sortedBookings[0].endDateTime.getTime() + 1000).toLocaleString(),
-        suggestion: "This workspace is fully booked for this date. Please choose a different date or workspace type."
-      });
+      return res.status(400).json({ error: "No available slots for this selected date range" });
     }
 
-    // Create the booking
+    // 4. Create record with phone number and distinct dates
     const booking = await prisma.usageRecord.create({
       data: {
         customerName,
+        customerPhone: phoneNumber, // Saved to our new schema field
         amountPaid: parseFloat(amountPaid),
         paymentMethod,
         usageDate: bookingStart,
         endDateTime: bookingEnd,
-        duration,
+        duration: `${durationNum} ${durationType.toLowerCase()}`,
         staffId: req.user.id,
         workspaceTypeId,
       },
       include: {
-        staff: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
+        staff: { select: { id: true, name: true, email: true } },
         workspaceType: true,
       },
     });
@@ -377,15 +361,16 @@ app.post("/api/bookings", authenticateToken, async (req, res) => {
       bookingPeriod: {
         start: bookingStart,
         end: bookingEnd,
-        duration,
-      },
-      remainingCapacity: workspaceType.capacity - (overlappingBookings.length + 1),
+        duration: `${durationNum} ${durationType.toLowerCase()}`,
+      }
     });
   } catch (error) {
     console.error("Error creating booking:", error);
     res.status(500).json({ error: "Failed to create booking" });
   }
 });
+
+
 
 // Add this helper endpoint to check availability for a specific date/time
 app.get("/api/bookings/check-availability", authenticateToken, async (req, res) => {

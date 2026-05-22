@@ -47,6 +47,7 @@ model WorkspaceType {
 model UsageRecord {
   id              String        @id @default(cuid())
   customerName    String
+  customerPhone   String 
   amountPaid      Float
   paymentMethod   PaymentMethod
   usageDate       DateTime      // Start time of booking
