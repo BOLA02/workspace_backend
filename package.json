@@ -9,7 +9,9 @@
     "dev": "nodemon src/index.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:workspaces": "node scripts/seedWorkspaces.js",
+    "seed:dat": "node scripts/seed.js",
     "seed:all": "npm run seed:admin && npm run seed:workspaces",
+    "db:reset": "npm run seed:all && npm run seed:dat",
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
     "studio": "npx prisma studio"
